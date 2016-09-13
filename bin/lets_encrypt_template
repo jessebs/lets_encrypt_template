@@ -35,7 +35,17 @@ File.symlink(AVAILABLE_PATH, ENABLED_PATH)
 
 # Call
 puts "Registering #{DOMAIN} with letsencrypt"
-puts `certbot certonly --webroot -w /var/www/#{DOMAIN}/www/ -d #{DOMAIN} -d www.#{DOMAIN}`
+result  = system "certbot certonly --webroot -w /var/www/#{DOMAIN}/www/ -d #{DOMAIN} -d www.#{DOMAIN}"
+
+if !result
+  STDERR.puts 'Lets encrypt setup failed.  Cleaning up'
+
+  File.delete(AVAILABLE_PATH)
+  File.delete(ENABLED_PATH)
+  FileUtils.rmtree(DOMAIN_DIR)
+
+  exit 1
+end
 
 # Finalize the site
 puts "Finalizing #{AVAILABLE_PATH}."
