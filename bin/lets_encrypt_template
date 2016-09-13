@@ -1,38 +1,47 @@
 #!/usr/bin/env ruby
 
+require 'erubis'
 require 'fileutils'
 
 raise "Usage:  #{$PROGRAM_NAME} <domain_name>" unless ARGV.length == 1
 
 DOMAIN = ARGV[0]
 
-ASSET_DIR = File.join(__dir__, '..', '..', 'assets')
-AVAILABLE_PATH = File.join('', 'etc', 'nginx', 'sites-available')
-ENABLED_PATH = File.join('', 'etc', 'nginx', 'sites-enabled')
+ASSET_DIR = File.join(__dir__, '..', 'assets')
+AVAILABLE_PATH = File.join('', 'etc', 'nginx', 'sites-available', DOMAIN)
+ENABLED_PATH = File.join('', 'etc', 'nginx', 'sites-enabled', DOMAIN)
 DOMAIN_DIR = File.join('', 'var', 'www', DOMAIN)
 WEB_DIR = File.join(DOMAIN_DIR, 'www')
 
 context = {domain: DOMAIN}
 
+puts "Setting up #{DOMAIN}"
+
 # Make the web dir
+puts "Making #{WEB_DIR}"
 FileUtils.mkdir_p(WEB_DIR)
-FileUtils.chown_r('www-data', 'www-data', DOMAIN_DIR)
+FileUtils.chown_R('www-data', 'www-data', DOMAIN_DIR)
 
 # Create the file
+puts "Creating Temporary #{AVAILABLE_PATH}."
 input = File.read(File.join(ASSET_DIR, 'initial.erb'))
 eruby = Erubis::Eruby.new(input)
 result = eruby.result(context)
-File.write(File.join(AVAILABLE_PATH, DOMAIN), result)
+File.write(AVAILABLE_PATH, result)
 
 # Enable the site
-File.symlink(File.join(AVAILABLE_PATH, DOMAIN), File.join(ENABLED_PATH, DOMAIN))
+puts "Enabling #{DOMAIN}"
+File.symlink(AVAILABLE_PATH, ENABLED_PATH)
 
 # Call
+puts "Registering #{DOMAIN} with letsencrypt"
 puts `certbot certonly --webroot -w /var/www/#{DOMAIN}/www/ -d #{DOMAIN} -d www.#{DOMAIN}`
 
 # Finalize the site
+puts "Finalizing #{AVAILABLE_PATH}."
 input = File.read(File.join(ASSET_DIR, 'final.erb'))
 eruby = Erubis::Eruby.new(input)
 eruby.result(context)
-File.write(File.join(AVAILABLE_PATH, DOMAIN), result)
+File.write(AVAILABLE_PATH, result)
 
+puts 'Finished'
