@@ -7,3 +7,7 @@
 /pkg/
 /spec/reports/
 /tmp/
+/.
+.idea/
+assets/
+bin/lets_encrypt_template

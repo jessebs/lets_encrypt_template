@@ -1,5 +1,4 @@
-require "lets_encrypt_template/version"
+require_relative 'lets_encrypt_template/version'
 
 module LetsEncryptTemplate
-  # Your code goes here...
 end
