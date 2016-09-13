@@ -2,6 +2,7 @@
 
 require 'erubis'
 require 'fileutils'
+require_relative '../lib/lets_encrypt_template/version'
 
 raise "Usage:  #{$PROGRAM_NAME} <domain_name>" unless ARGV.length == 1
 
@@ -12,8 +13,26 @@ AVAILABLE_PATH = File.join('', 'etc', 'nginx', 'sites-available', DOMAIN)
 ENABLED_PATH = File.join('', 'etc', 'nginx', 'sites-enabled', DOMAIN)
 DOMAIN_DIR = File.join('', 'var', 'www', DOMAIN)
 WEB_DIR = File.join(DOMAIN_DIR, 'www')
+INDEX = File.join(WEB_DIR, 'index.html')
 
-context = {domain: DOMAIN}
+context = {domain: DOMAIN, version: LetsEncryptTemplate::VERSION}
+
+def reload_nginx
+  puts 'Reloading NGINX config'
+  cmd = 'service nginx reload'
+  exec cmd
+end
+
+def exec(cmd)
+  puts cmd
+  if !system("sudo #{cmd}")
+    STDERR.puts 'Setup failed.  Cleaning up'
+    File.delete(AVAILABLE_PATH)
+    File.delete(ENABLED_PATH)
+    FileUtils.rmtree(DOMAIN_DIR)
+    exit 1
+  end
+end
 
 puts "Setting up #{DOMAIN}"
 
@@ -21,6 +40,15 @@ puts "Setting up #{DOMAIN}"
 puts "Making #{WEB_DIR}"
 FileUtils.mkdir_p(WEB_DIR)
 FileUtils.chown_R('www-data', 'www-data', DOMAIN_DIR)
+
+# Make index
+unless File.file?(INDEX)
+  puts "Creating Index #{INDEX}."
+  input = File.read(File.join(ASSET_DIR, 'index.html.erb'))
+  eruby = Erubis::Eruby.new(input)
+  result = eruby.result(context)
+  File.write(INDEX, result)
+end
 
 # Create the file
 puts "Creating Temporary #{AVAILABLE_PATH}."
@@ -31,27 +59,24 @@ File.write(AVAILABLE_PATH, result)
 
 # Enable the site
 puts "Enabling #{DOMAIN}"
-File.symlink(AVAILABLE_PATH, ENABLED_PATH)
+FileUtils.symlink(AVAILABLE_PATH, ENABLED_PATH, {force: true})
+
+# Reloading NGINX Config
+reload_nginx
 
 # Call
 puts "Registering #{DOMAIN} with letsencrypt"
-result  = system "certbot certonly --webroot -w /var/www/#{DOMAIN}/www/ -d #{DOMAIN} -d www.#{DOMAIN}"
-
-if !result
-  STDERR.puts 'Lets encrypt setup failed.  Cleaning up'
-
-  File.delete(AVAILABLE_PATH)
-  File.delete(ENABLED_PATH)
-  FileUtils.rmtree(DOMAIN_DIR)
-
-  exit 1
-end
+cmd = "certbot certonly --webroot -w /var/www/#{DOMAIN}/www/ -d #{DOMAIN} -d www.#{DOMAIN}"
+exec cmd
 
 # Finalize the site
 puts "Finalizing #{AVAILABLE_PATH}."
 input = File.read(File.join(ASSET_DIR, 'final.erb'))
 eruby = Erubis::Eruby.new(input)
-eruby.result(context)
+result = eruby.result(context)
 File.write(AVAILABLE_PATH, result)
+
+# Reloading NGINX Config
+reload_nginx
 
 puts 'Finished'
