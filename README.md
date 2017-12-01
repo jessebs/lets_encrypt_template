@@ -1,7 +1,7 @@
 # LetsEncryptTemplate
 
 ## Usage
-> vmsudo lets_encrypt_template domain.com
+> rvmsudo lets_encrypt_template domain.com
 
 ## License
 
